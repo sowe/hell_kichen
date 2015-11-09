@@ -1,1 +1,55 @@
-#!/bin/bash 
+#!/bin/bash
+ 
+function init(){
+	USER_HOME=$(eval echo ~${SUDO_USER})
+	echo "User PATH: "${USER_HOME}/.kettle/hellkichen.properties
+	if [[ ! -f ${USER_HOME}/.kettle/hellkichen.properties ]]; then
+		touch ${USER_HOME}/.kettle/hellkichen.properties;
+        echo "hola";
+		echo "kettle_path =" >> ${USER_HOME}/.kettle/hellkichen.properties;
+		echo "kettle_log = " >> ${USER_HOME}/.kettle/hellkichen.properties;
+		echo "exit";
+	fi
+	echo ${USER_HOME}/.kettle/hellkichen.properties
+	export FILE=${USER_HOME}/.kettle/hellkichen.properties;
+}
+
+function setParameterAndLog(){
+ echo "PARH of configuration: "$FILE;
+ 	export pdi=$(grep -i 'kettle_path' $FILE  | cut -f2 -d'=')
+ 	export log=$(grep -i 'kettle_log' $FILE  | cut -f2 -d'=')
+ echo -e "Parameters PDI:" $pdi "and LOGS" $log 
+    NOW=$(date +"%d%m%Y_%H%M%S")
+    logname=$1_$NOW.log
+}
+
+function run(){
+	if [[ $1 =~ \.kjb$ ]]; then
+			./kitchen.sh -file=$1 -level=$2 > $log$logname
+			echo "command run  a job : .$FILE/kitchen.sh -file=$1 -level=$2"
+	echo "job"
+	else
+			./pan.sh -file=$1 -level=$2 > $log$logname
+			echo "command run a transformation: .$FILE/pin.sh -file=$1 -level=$2"
+	echo "ktr"
+	fi
+
+	case  $?  in
+
+	    0) echo  "-> The job ran without a problem." >> $logname ;;
+	    1) echo  "-> Errors occurred during processing." >> $logname ;;
+	    2) echo  "-> An unexpected error occurred during loading / running of the job." >> $logname ;;
+	    7) echo  "-> The job couldn't be loaded from XML or the Repositorn." >> $logname ;;
+	    8) echo  "-> Error loading steps or plugins (error in loading one of the plugins mostly)." >> $logname ;;
+	    9) echo  "-> Command line usage printing." >> $logname ;;
+
+	esac 
+}
+
+init;
+setParameterAndLog;
+if [[ ! -f $1 ]];
+	echo -e "\033[31m Error!!!! the ETL process don't exist please check the path"
+else
+	run;
+fi
