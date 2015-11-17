@@ -1,6 +1,12 @@
 #!/bin/bash
- 
+
+LOAD_FILE="" 
+LOG_LEVEL=""
 NOW=$(date +"%d%m%Y_%H%M%S");
+
+function help(){
+	echo "hellkichen f etl file l log level"
+}
 
 function menu(){
 	echo "menu"
@@ -26,11 +32,16 @@ function setParameterAndLog(){
 }
 
 function run(){
-	if [[ $1 =~ \.kjb$ ]]; then
-			./kitchen.sh -file=$1 -level=$2 > $1_$NOW.log
-			echo "command run  a job : .$FILE/kitchen.sh -file=$1 -level=$2 > $1_$NOW.log"
+
+	local load_file=${1}
+	local log_level=${2:-'Debug'}
+	local parameters=${3:-''}
+
+	if [[ ${load_file} =~ \.kjb$ ]]; then
+			./kitchen.sh -file=${load_file} -level=${log_level} > ${load_file}_$NOW.log
+			echo "command run  a job : .$FILE/kitchen.sh -file=$1 $3 -level=$2 > $1_$NOW.log"
 	else
-			./pan.sh -file=$1 -level=$2 > $log$logname
+			./pan.sh -file=${load_file} -level=${log_level} > $log$logname
 			echo "command run a transformation: .$FILE/pin.sh -file=$1 -level=$2 > $1_$NOW.log"
 	fi
 
@@ -54,9 +65,21 @@ function getPid(){
 
 init;
 setParameterAndLog;
-if [! -f $1 ];
+
+while getopts "f:l:h" opts; do
+	case ${opts} in
+		 f) LOAD_FILE=${OPTARG} ;;
+		 l) LOG_LEVEL=${OPTARG} ;;
+		 h) help;;
+        \?) echo "" ;;
+         :) echo "" ;;
+	esac
+done
+
+if [! -f ${LOAD_FILE} ];
+
 	echo -e "\033[31m Error!!!! the ETL process don't exist please check the path"
 else
-	run;
+	run ${LOAD_FILE} ${LOG_LEVEL}
 	getPid;
 fi
