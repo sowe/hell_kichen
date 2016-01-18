@@ -1,19 +1,10 @@
 #!/bin/bash
-set -e;
-FILE="";
+set -e
+USER_HOME=$(eval echo ~${SUDO_USER})
+FILE=""
 NOW=$(date +"%d%m%Y_%H%M%S");
-pdi="";
-log="";
-LOAD_FILE="";
-LOG_LEVEL="";
-
-function help(){
-	echo "hellkichen f etl file l log level"
-}
-
-function menu(){
-	echo "menu"
-}
+pdi=""
+log=""
 
 function init(){
 	USER_HOME=$(eval echo ~${SUDO_USER})
@@ -23,14 +14,14 @@ function init(){
 		echo "kettle_path =" >> ${USER_HOME}/.kettle/hellkichen.properties;
 		echo "kettle_log = " >> ${USER_HOME}/.kettle/hellkichen.properties;
 	fi
-
+	echo ${USER_HOME}/.kettle/hellkichen.properties
 	FILE=${USER_HOME}/.kettle/hellkichen.properties;
+	
 }
 
 function setParameterAndLog(){
- 	pdi=$(grep -i 'kettle_path' $FILE  | cut -f2 -d'=')
- 	log=$(grep -i 'kettle_log' $FILE  | cut -f2 -d'=')
-	echo -e "Parameters PDI:" $pdi "and LOGS" $log 
+ 	 pdi=$(grep -i 'kettle_path' $FILE  | cut -f2 -d'=')
+ 	 log=$(grep -i 'kettle_log' $FILE  | cut -f2 -d'=')
 }
 
 function run(){
@@ -59,27 +50,12 @@ function run(){
 	esac 
 }
 
-function getPid(){
-	process_id='/bin/ps -fu $USER| grep "$1" | grep -v "grep" | awk '{print $2}''
-	echo $process_id
-	export process_id_$1 = $process_id;
-}
-
 init;
 setParameterAndLog;
 
-while getopts "f:l:h" opts; do
-	case ${opts} in
-		 f) LOAD_FILE=${OPTARG} ;;
-		 l) LOG_LEVEL=${OPTARG} ;;
-		 h) help;;
-        \?) echo "" ;;
-         :) echo "" ;;
-	esac
-done
-
 if [! -f ${LOAD_FILE} ];
-	echo"\033[31m Error!!!! the ETL process don't exist please check the path"
+
+	echo -e "\033[31m Error!!!! the ETL process don't exist please check the path"
 else
 	run ${LOAD_FILE} ${LOG_LEVEL}
 	getPid;
