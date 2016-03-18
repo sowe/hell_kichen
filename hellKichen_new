@@ -38,7 +38,7 @@ function help (){
 cat <<EOF
     Usage: hells_kitchen.sh <[options]>
     Options:
-        -t = time
+        -t = time (Optional)
         -j = job file (ktr or kjb)
         -l = bug level in pdi:
              Error: Only show errors
@@ -46,11 +46,11 @@ cat <<EOF
              Minimal: Only use minimal logging
              Basic: This is the default basic logging level
              Detailed: Give detailed logging output
-             Debug: For debugging purposes, very detailed output.
+             Debug: For debugging purposes, very detailed output. (Default)
              Rowlevel: Logging at a row level, this can generate a lot of data.
-        -e = dynamic envairoment (please see the secction enviaroment)
-        -p = path of pdi
-        -ln= path of log folder
+        -e = dynamic envairoment (please see the secction enviaroment) (Optional)
+        -p = path of pdi (Optinal)
+        -ln= path of log folder (Optinal)
 EOF
     _die
 }
