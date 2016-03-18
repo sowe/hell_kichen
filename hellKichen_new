@@ -34,7 +34,7 @@ function timer(){
  export TIMER='time';
 }
 
-function help (){
+function help(){
 cat <<EOF
     Usage: hells_kitchen.sh <[options]>
     Options:
@@ -55,7 +55,7 @@ cat <<EOF
 EOF
 }
 
-function stove (){
+function stove(){
 
     local job=${1:-''}
     local debug_level=${2:-''}
