@@ -1,62 +1,104 @@
 #!/bin/bash
+
 set -e
-USER_HOME=$(eval echo ~${SUDO_USER})
-FILE=""
-NOW=$(date +"%d%m%Y_%H%M%S");
-pdi=""
-log=""
+set -u
 
-function init(){
-	USER_HOME=$(eval echo ~${SUDO_USER})
-	echo "User PATH: "${USER_HOME}/.kettle/hellkichen.properties
-	if [ ! -f ${USER_HOME}/.kettle/hellkichen.properties ]; then
-		touch ${USER_HOME}/.kettle/hellkichen.properties;
-		echo "kettle_path =" >> ${USER_HOME}/.kettle/hellkichen.properties;
-		echo "kettle_log = " >> ${USER_HOME}/.kettle/hellkichen.properties;
-	fi
-	echo ${USER_HOME}/.kettle/hellkichen.properties
-	FILE=${USER_HOME}/.kettle/hellkichen.properties;
-	
+
+
+
+
+
+function setEnvironment
+{
+    export KETTLE_HOME=$1
+    export KETTLE_JNDI_ROOT=$KETTLE_HOME
 }
 
-function setParameterAndLog(){
- 	 pdi=$(grep -i 'kettle_path' $FILE  | cut -f2 -d'=')
- 	 log=$(grep -i 'kettle_log' $FILE  | cut -f2 -d'=')
+
+function _console(){
+    local message = ${1:-''}
+    [[ -n "$message" ]] && echo -e "$message"
 }
 
-function run(){
-
-	local load_file=${1}
-	local log_level=${2:-'Debug'}
-	local parameters=${3:-''}
-
-	if [[ ${load_file} =~ \.kjb$ ]]; then
-			./kitchen.sh -file=${load_file} -level=${log_level} > ${load_file}_$NOW.log
-			echo "command run  a job : .$FILE/kitchen.sh -file=$1 $3 -level=$2 > $1_$NOW.log"
-	else
-			./pan.sh -file=${load_file} -level=${log_level} > $log$logname
-			echo "command run a transformation: .$FILE/pin.sh -file=$1 -level=$2 > $1_$NOW.log"
-	fi
-
-	case  $?  in
-
-	    0) echo  "-> The job ran without a problem." >> $logname ;;
-	    1) echo  "-> Errors occurred during processing." >> $logname ;;
-	    2) echo  "-> An unexpected error occurred during loading / running of the job." >> $logname ;;
-	    7) echo  "-> The job couldn't be loaded from XML or the Repositorn." >> $logname ;;
-	    8) echo  "-> Error loading steps or plugins (error in loading one of the plugins mostly)." >> $logname ;;
-	    9) echo  "-> Command line usage printing." >> $logname ;;
-
-	esac 
+function _die(){
+    local message = ${1:-''}
+    local exit_code = ${2:-0}
+    _console "$message"
+    exit $exit_code
 }
 
-init;
-setParameterAndLog;
 
-if [! -f ${LOAD_FILE} ];
+function timer(){
+ time cmd ;
+}
 
-	echo -e "\033[31m Error!!!! the ETL process don't exist please check the path"
-else
-	run ${LOAD_FILE} ${LOG_LEVEL}
-	getPid;
-fi
+function help (){
+cat <<EOF
+    Usage: hells_kitchen.sh <[options]>
+    Options:
+        -t = time
+        -j = job file (ktr or kjb)
+        -l = bug level in pdi:
+             Error: Only show errors
+             Nothing: Don't show any output
+             Minimal: Only use minimal logging
+             Basic: This is the default basic logging level
+             Detailed: Give detailed logging output
+             Debug: For debugging purposes, very detailed output.
+             Rowlevel: Logging at a row level, this can generate a lot of data.
+        -e = dynamic envairoment (please see the secction enviaroment)
+        -p = path of pdi
+        -ln= path of log folder
+EOF
+    _die
+}
+
+function stove (){
+
+    local job=${1:-''}
+    local debug_level=${2:-''}
+    local log_name=${3:-''}
+    local now=$(date -u +%Y%0m%0d%H%M%S)
+    local log_pattor="${kettle_log}${log_name}_${now}.log"
+    local environment=${4:-''}
+    local timer=${5:-''}    
+
+    cd $kettle_path
+    if [[ $job =~ \.kjb$ ]]; then
+        cmd="$timer ./kitchen.sh -file=$job -level=$debug_level  >> $log"
+    else
+        cmd="$timer ./pan.sh -file=$job -level=$debug_level  >> $log"
+    fi
+
+    _console "Executing: $cmd"
+
+    sleep 1
+    eval $cmd 2>>$log
+    case  $?  in
+        0) _console  "-> The job ran without a problem." >> $log ;;
+        1) _console "-> Errors occurred during processing" >> $log ;;
+        2) _console "-> An unexpected error occurred during loading / running of the job" >> $log ;;
+        7) _console "-> The job couldn't be loaded from XML or the Repository" >> $log ;;
+        8) _console "-> Error loading steps or plugins (error in loading one of the plugins mostly)" >> $log ;;
+        9) _console "-> Command line usage printing" >> $log ;;
+        *) _console "-> Unknown error code: $?" >> $log ;;
+    esac 
+}
+
+
+##
+# ::main::
+#
+while getopts "t:j:l:e:p:ln:h" opts; do
+      case ${opts} in
+           t)  LOAD_FILE=${OPTARG} ;;
+           j)  LOG_LEVEL=${OPTARG} ;;
+           l)  help;;
+           e)  help;;
+           p)  help;;
+           ln) help;;
+           h)  help;;
+          \?)  echo "" ;;
+           :)  echo "" ;;
+      esac
+ done
