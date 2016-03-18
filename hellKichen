@@ -1,86 +1,113 @@
 #!/bin/bash
-set -e;
-FILE="";
-NOW=$(date +"%d%m%Y_%H%M%S");
-pdi="";
-log="";
-LOAD_FILE="";
-LOG_LEVEL="";
+
+set -e
+set -u
+
+TIMER=''
+JOB=''
+KETTLE_HOME=''
+KETTLE_JNDI_ROOT=''
+DEBUGLEVEL=''
+LOGNAME=''
+KETTLE_PAT=''
+KETTLE_LOG=''
+
+function setEnvironment
+{
+    export KETTLE_HOME=$1
+    export KETTLE_JNDI_ROOT=$KETTLE_HOME
+}
+
+function _console(){
+    local message=${1:-''}
+    [[ -n "$message" ]] && echo -e "$message"
+}
+
+function _die(){
+    local message=${1:-''}
+    local exit_code=${2:-0}
+    _console "$message"
+    exit $exit_code
+}
+
+function timer(){
+ export TIMER='time';
+}
 
 function help(){
-	echo "hellkichen f etl file l log level"
+cat <<EOF
+    Usage: hells_kitchen.sh <[options]>
+    Options:
+        -t = time (Optional)
+        -j = job file (ktr or kjb)
+        -l = bug level in pdi:
+             Error: Only show errors
+             Nothing: Don't show any output
+             Minimal: Only use minimal logging
+             Basic: This is the default basic logging level
+             Detailed: Give detailed logging output
+             Debug: For debugging purposes, very detailed output. (Default)
+             Rowlevel: Logging at a row level, this can generate a lot of data.
+             Stream: No log show the content
+        -e = dynamic envairoment (please see the secction enviaroment) (Optional)
+        -p = path of pdi (Optinal)
+        -ln= path of log folder (Optinal)
+EOF
 }
 
-function menu(){
-	echo "menu"
+function stove(){
+
+    local job=${1:-''}
+    local debug_level=${2:-''}
+    local log_name=${3:-''}
+    local environment=${4:-''}
+    local timer=${5:-''}
+    local kettle_path=${6:-''}
+    local kettle_log=${7:-''}
+
+    local now=$(date -u +%Y%0m%0d%H%M%S)
+    local log_pattor="${kettle_log}${log_name}_${now}.log"
+
+    cd $kettle_path
+    if [[ $job =~ \.kjb$ ]]; then
+        cmd="$timer ./kitchen.sh -file=$job -level=$debug_level  >> $kettle_log"
+    else
+        cmd="$timer ./pan.sh -file=$job -level=$debug_level  >> $kettle_log"
+    fi
+
+    _console "Executing: $cmd"
+
+    sleep 1
+    eval $cmd 2>>$kettle_log
+    case  $?  in
+        0) _console "The job ran without a problem." >> $kettle_log ;;
+        1) _console "Errors occurred during processing" >> $kettle_log ;;
+        2) _console "An unexpected error occurred during loading / running of the job" >> $kettle_log ;;
+        7) _console "The job couldn't be loaded from XML or the Repository" >> $kettle_log ;;
+        8) _console "Error loading steps or plugins (error in loading one of the plugins mostly)" >> $kettle_log ;;
+        9) _console "Command line usage printing" >> $kettle_log ;;
+        *) _console "Unknown error code: $?" >> $kettle_log ;;
+    esac 
 }
 
-function init(){
-	USER_HOME=$(eval echo ~${SUDO_USER})
-	echo "User PATH: "${USER_HOME}/.kettle/hellkichen.properties
-	if [ ! -f ${USER_HOME}/.kettle/hellkichen.properties ]; then
-		touch ${USER_HOME}/.kettle/hellkichen.properties;
-		echo "kettle_path =" >> ${USER_HOME}/.kettle/hellkichen.properties;
-		echo "kettle_log = " >> ${USER_HOME}/.kettle/hellkichen.properties;
-	fi
+##
+# ::main::
+#
+while getopts "t:j:l:e:p:ln:h" opts; do
+      case ${opts} in
+           t)  timer;;
+           j)  JOB=${OPTARG} ;;
+           l)  LOGNAME=${OPTARG};;
+           e)  setEnvironment ${OPTARG};;
+           p)  KETTLE_PAT=${OPTARG};;
+           ln) KETTLE_LOG=${OPTARG};;
+           h)  help;;
+          \?)  echo "" ;;
+           :)  echo "" ;;
+      esac
+ done
 
-	FILE=${USER_HOME}/.kettle/hellkichen.properties;
-}
-
-function setParameterAndLog(){
- 	pdi=$(grep -i 'kettle_path' $FILE  | cut -f2 -d'=')
- 	log=$(grep -i 'kettle_log' $FILE  | cut -f2 -d'=')
-	echo -e "Parameters PDI:" $pdi "and LOGS" $log 
-}
-
-function run(){
-
-	local load_file=${1}
-	local log_level=${2:-'Debug'}
-	local parameters=${3:-''}
-
-	if [[ ${load_file} =~ \.kjb$ ]]; then
-			./kitchen.sh -file=${load_file} -level=${log_level} > ${load_file}_$NOW.log
-			echo "command run  a job : .$FILE/kitchen.sh -file=$1 $3 -level=$2 > $1_$NOW.log"
-	else
-			./pan.sh -file=${load_file} -level=${log_level} > $log$logname
-			echo "command run a transformation: .$FILE/pin.sh -file=$1 -level=$2 > $1_$NOW.log"
-	fi
-
-	case  $?  in
-
-	    0) echo  "-> The job ran without a problem." >> $logname ;;
-	    1) echo  "-> Errors occurred during processing." >> $logname ;;
-	    2) echo  "-> An unexpected error occurred during loading / running of the job." >> $logname ;;
-	    7) echo  "-> The job couldn't be loaded from XML or the Repositorn." >> $logname ;;
-	    8) echo  "-> Error loading steps or plugins (error in loading one of the plugins mostly)." >> $logname ;;
-	    9) echo  "-> Command line usage printing." >> $logname ;;
-
-	esac 
-}
-
-function getPid(){
-	process_id='/bin/ps -fu $USER| grep "$1" | grep -v "grep" | awk '{print $2}''
-	echo $process_id
-	export process_id_$1 = $process_id;
-}
-
-init;
-setParameterAndLog;
-
-while getopts "f:l:h" opts; do
-	case ${opts} in
-		 f) LOAD_FILE=${OPTARG} ;;
-		 l) LOG_LEVEL=${OPTARG} ;;
-		 h) help;;
-        \?) echo "" ;;
-         :) echo "" ;;
-	esac
-done
-
-if [! -f ${LOAD_FILE} ];
-	echo"\033[31m Error!!!! the ETL process don't exist please check the path"
-else
-	run ${LOAD_FILE} ${LOG_LEVEL}
-	getPid;
-fi
+##
+# ::launcher::
+#
+stove $JOB $DEBUGLEVEL $LOGNAME $TIMER $KETTLE_PAT
