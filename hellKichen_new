@@ -3,17 +3,20 @@
 set -e
 set -u
 
-
-
-
-
+TIMER=''
+JOB=''
+KETTLE_HOME=''
+KETTLE_JNDI_ROOT=''
+DEBUGLEVEL=''
+LOGNAME=''
+KETTLE_HOME=''
+KETTLE_JNDI_ROOT=''
 
 function setEnvironment
 {
     export KETTLE_HOME=$1
     export KETTLE_JNDI_ROOT=$KETTLE_HOME
 }
-
 
 function _console(){
     local message = ${1:-''}
@@ -27,9 +30,8 @@ function _die(){
     exit $exit_code
 }
 
-
 function timer(){
- time cmd ;
+ export TIMER='time';
 }
 
 function help (){
@@ -75,13 +77,13 @@ function stove (){
     sleep 1
     eval $cmd 2>>$log
     case  $?  in
-        0) _console  "-> The job ran without a problem." >> $log ;;
-        1) _console "-> Errors occurred during processing" >> $log ;;
-        2) _console "-> An unexpected error occurred during loading / running of the job" >> $log ;;
-        7) _console "-> The job couldn't be loaded from XML or the Repository" >> $log ;;
-        8) _console "-> Error loading steps or plugins (error in loading one of the plugins mostly)" >> $log ;;
-        9) _console "-> Command line usage printing" >> $log ;;
-        *) _console "-> Unknown error code: $?" >> $log ;;
+        0) _console "The job ran without a problem." >> $log ;;
+        1) _console "Errors occurred during processing" >> $log ;;
+        2) _console "An unexpected error occurred during loading / running of the job" >> $log ;;
+        7) _console "The job couldn't be loaded from XML or the Repository" >> $log ;;
+        8) _console "Error loading steps or plugins (error in loading one of the plugins mostly)" >> $log ;;
+        9) _console "Command line usage printing" >> $log ;;
+        *) _console "Unknown error code: $?" >> $log ;;
     esac 
 }
 
