@@ -12,6 +12,7 @@ LOGNAME=''
 KETTLE_PAT=''
 KETTLE_LOG=''
 
+
 function setEnvironment
 {
     export KETTLE_HOME=$1
@@ -34,6 +35,12 @@ function timer(){
  export TIMER='time';
 }
 
+function getPdi(){
+    process_id='/bin/ps -fu $USER| grep "$1" | grep -v "grep" | awk '{print $1}''
+    _console $process_id
+    export $process_id;
+}
+
 function help(){
 cat <<EOF
     Usage: hells_kitchen.sh <[options]>
@@ -44,29 +51,37 @@ cat <<EOF
              Error: Only show errors
              Nothing: Don't show any output
              Minimal: Only use minimal logging
-             Basic: This is the default basic logging level
+             Basic: This is the default basic logging level (Default)
              Detailed: Give detailed logging output
-             Debug: For debugging purposes, very detailed output. (Default)
+             Debug: For debugging purposes, very detailed output.
              Rowlevel: Logging at a row level, this can generate a lot of data.
              Stream: No log show the content
         -e = dynamic envairoment (please see the secction enviaroment) (Optional)
         -p = path of pdi (Optinal)
         -ln= path of log folder (Optinal)
 EOF
+_die
 }
 
 function stove(){
 
     local job=${1:-''}
-    local debug_level=${2:-''}
+    local debug_level=${2:-'Basic'}
     local log_name=${3:-''}
-    local environment=${4:-''}
-    local timer=${5:-''}
-    local kettle_path=${6:-''}
-    local kettle_log=${7:-''}
+    local timer=${4:-''}
+    local kettle_path=${5:-''}
+    local kettle_log=${6:-''}
 
     local now=$(date -u +%Y%0m%0d%H%M%S)
     local log_pattor="${kettle_log}${log_name}_${now}.log"
+    #echo $environment
+
+    ##
+    # ::if don't exit the job ::
+    #
+    if [ !-e $job ]; then
+        _die "Error!!!! the ETL process don't exist please check the path" 4
+    fi
 
     cd $kettle_path
     if [[ $job =~ \.kjb$ ]]; then
@@ -93,21 +108,22 @@ function stove(){
 ##
 # ::main::
 #
-while getopts "t:j:l:e:p:ln:h" opts; do
+while getopts ":t:j:l:e:p:ln:h" opts; do
       case ${opts} in
-           t)  timer;;
+           t)  TIMER=${OPTARG};;
            j)  JOB=${OPTARG} ;;
            l)  LOGNAME=${OPTARG};;
            e)  setEnvironment ${OPTARG};;
            p)  KETTLE_PAT=${OPTARG};;
            ln) KETTLE_LOG=${OPTARG};;
            h)  help;;
-          \?)  echo "" ;;
-           :)  echo "" ;;
+          \?)  echo "1" ;;
+           :)  echo "2" ;;
+           *)  echo "3" ;;
       esac
  done
 
 ##
 # ::launcher::
 #
-stove $JOB $DEBUGLEVEL $LOGNAME $TIMER $KETTLE_PAT
+stove $JOB $DEBUGLEVEL $LOGNAME $TIMER $KETTLE_PAT $KETTLE_LOG
