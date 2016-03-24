@@ -11,7 +11,12 @@ DEBUGLEVEL=''
 LOGNAME=''
 KETTLE_PAT=''
 KETTLE_LOG=''
+EXTRA_PARAM=''
 
+
+function extraParam(){
+    RESULT=$(python -c '')
+}
 
 function setEnvironment
 {
@@ -24,15 +29,15 @@ function _console(){
     [[ -n "$message" ]] && echo -e "$message"
 }
 
+function _init(){
+    echo "init"
+}
+
 function _die(){
     local message=${1:-''}
     local exit_code=${2:-0}
     _console "$message"
     exit $exit_code
-}
-
-function timer(){
- export TIMER='time';
 }
 
 function getPdi(){
@@ -59,6 +64,7 @@ cat <<EOF
         -e = dynamic envairoment (please see the secction enviaroment) (Optional)
         -p = path of pdi (Optinal)
         -ln= path of log folder (Optinal)
+        -x = extra parameter in JSON file (is mandatory pass to etl like paremeter)(Optinal)
 EOF
 _die
 }
@@ -127,3 +133,4 @@ while getopts ":t:j:l:e:p:ln:h" opts; do
 # ::launcher::
 #
 stove $JOB $DEBUGLEVEL $LOGNAME $TIMER $KETTLE_PAT $KETTLE_LOG
+exit 0
