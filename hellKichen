@@ -3,26 +3,21 @@
 set -e
 set -u
 
-TIMER=''
-JOB=''
-KETTLE_HOME=''
-KETTLE_JNDI_ROOT=''
-DEBUGLEVEL=''
-LOGNAME=''
-KETTLE_PAT=''
-KETTLE_LOG=''
-
-
-function setEnvironment
-{
-    export KETTLE_HOME=$1
-    export KETTLE_JNDI_ROOT=$KETTLE_HOME
-}
+KETTLE_HOME="";
+KETTLE_JNDI_ROOT='';
+TIMER='';
+DEBUGLEVEL='';
+LOGNAME='';
+KETTLE_PAT='';
+KETTLE_LOG='';
+JOB='';
+ENVIRONMENT='';
 
 function _console(){
     local message=${1:-''}
     [[ -n "$message" ]] && echo -e "$message"
 }
+
 
 function _die(){
     local message=${1:-''}
@@ -31,14 +26,55 @@ function _die(){
     exit $exit_code
 }
 
-function timer(){
- export TIMER='time';
+##
+# Set a environment the kettele.properties 
+# JDBC files
+#
+function setEnvironment
+{
+    local environment=${1:-$HOME'/.kettle'}
+    _console 'environment'
+
+    export KETTLE_HOME=$environment
+    export KETTLE_JNDI_ROOT=$KETTLE_HOME
 }
 
-function getPdi(){
-    process_id='/bin/ps -fu $USER| grep "$1" | grep -v "grep" | awk '{print $1}''
-    _console $process_id
-    export $process_id;
+##
+# This function include the time
+#
+function timer(){
+    export TIMER = 'time';
+}   
+
+
+function setKettleHome(){
+
+    local kettle_home=${1:-''}
+    export KETTLE_HOME=$kettle_home
+}
+
+function setKettleJndiRoot(){
+
+    local kettle_jndi=${1:-''}
+    export KETTLE_JNDI_ROOT=$kettle_jndi
+}
+
+
+function setPath
+{
+    local kettle_path=${1:-''}
+    local kettle_log=${2:-''}
+    _console "<<<<" + $KETTLE_HOME
+    if [ ! -f "$KETTLE_HOME/hellkitchen.properties" ]; then
+        echo "kettle_path=/foler_with_pdi/" >> ${KETTLE_HOME}/hellkitchen.properties;
+        echo "kettle_log=/tmp/logs/" >> ${KETTLE_HOME}/hellkitchen.properties;
+        _die "You need define the pdi/kettle path and log" 12
+    fi
+
+    source "$KETTLE_HOME/hellkitchen.properties";
+
+    _console "Parameters PDI:" $kettle_path "and LOGS" $kettle_log
+
 }
 
 function help(){
@@ -55,75 +91,78 @@ cat <<EOF
              Detailed: Give detailed logging output
              Debug: For debugging purposes, very detailed output.
              Rowlevel: Logging at a row level, this can generate a lot of data.
-             Stream: No log show the content
+             Stream : Show the log.
+        -n = Name of log
         -e = dynamic envairoment (please see the secction enviaroment) (Optional)
         -p = path of pdi (Optinal)
         -ln= path of log folder (Optinal)
+        -x = extra parameter in JSON file (is mandatory pass to etl like paremeter)(Optinal)
 EOF
-_die
+_die    
 }
 
-function stove(){
-
-    local job=${1:-''}
-    local debug_level=${2:-'Basic'}
-    local log_name=${3:-''}
-    local timer=${4:-''}
+function run(){
+    local timer=${1:-''}
+    local job=${2:-''}
+    local debug_level=${3:-'Basic'}
+    local log_name=${4:-''}
     local kettle_path=${5:-''}
     local kettle_log=${6:-''}
-
+    local enviaroment=${7:-''}
     local now=$(date -u +%Y%0m%0d%H%M%S)
-    local log_pattor="${kettle_log}${log_name}_${now}.log"
-    #echo $environment
+    local log="${kettle_log}${LOG_NAME}_${NOW}.log"
 
     ##
     # ::if don't exit the job ::
     #
     if [ !-e $job ]; then
-        _die "Error!!!! the ETL process don't exist please check the path" 4
+       _die "Error!!!! the ETL process don't exist please check the path" 4
     fi
 
-    cd $kettle_path
+    ##
+    # :: Engineer ::
+    #
     if [[ $job =~ \.kjb$ ]]; then
-        cmd="$timer ./kitchen.sh -file=$job -level=$debug_level  >> $kettle_log"
+       cmd="./kitchen.sh -file=$job -level=$debug_level  >> $kettle_log"
     else
-        cmd="$timer ./pan.sh -file=$job -level=$debug_level  >> $kettle_log"
+       cmd="./pan.sh -file=$job -level=$debug_level  >> $kettle_log"
     fi
-
     _console "Executing: $cmd"
 
+    
     sleep 1
-    eval $cmd 2>>$kettle_log
+    eval $cmd 2>>$log
     case  $?  in
-        0) _console "The job ran without a problem." >> $kettle_log ;;
-        1) _console "Errors occurred during processing" >> $kettle_log ;;
-        2) _console "An unexpected error occurred during loading / running of the job" >> $kettle_log ;;
-        7) _console "The job couldn't be loaded from XML or the Repository" >> $kettle_log ;;
-        8) _console "Error loading steps or plugins (error in loading one of the plugins mostly)" >> $kettle_log ;;
-        9) _console "Command line usage printing" >> $kettle_log ;;
-        *) _console "Unknown error code: $?" >> $kettle_log ;;
+       0) _console "The job ran without a problem." >>$log ;;
+       1) _console "Errors occurred during processing" >>$log ;;
+       2) _console "An unexpected error occurred during loading / running of the job" >>$log ;;
+       7) _console "The job couldn't be loaded from XML or the Repository" >>$log ;;
+       8) _console "Error loading steps or plugins (error in loading one of the plugins mostly)" >>$log ;;
+       9) _console "Command line usage printing" >>$log ;;
+       *) _console "Unknown error code: $?" >>$log ;;
     esac 
 }
 
 ##
 # ::main::
 #
-while getopts ":t:j:l:e:p:ln:h" opts; do
+while getopts ":t:j:l:e:p:ln:h:n" opts; do
       case ${opts} in
-           t)  TIMER=${OPTARG};;
-           j)  JOB=${OPTARG} ;;
-           l)  LOGNAME=${OPTARG};;
-           e)  setEnvironment ${OPTARG};;
-           p)  KETTLE_PAT=${OPTARG};;
-           ln) KETTLE_LOG=${OPTARG};;
-           h)  help;;
-          \?)  echo "1" ;;
-           :)  echo "2" ;;
-           *)  echo "3" ;;
+            t)  TIMER=${OPTARG};;
+            j)  JOB=${OPTARG} ;;
+            l)  DEBUGLEVEL=${OPTARG};;
+            e)  setEnvironment ${OPTARG};;
+            p)  setKettleHome=${OPTARG};;
+            ln) setKettleJndiRoot=${OPTARG};;
+            h)  help;;
       esac
  done
+
+
+setEnvironment
+setPath
 
 ##
 # ::launcher::
 #
-stove $JOB $DEBUGLEVEL $LOGNAME $TIMER $KETTLE_PAT $KETTLE_LOG
+run $TIMER $JOB $DEBUGLEVEL $logNAME $KETTLE_PAT $KETTLE_LOG $ENVIRONMENT
