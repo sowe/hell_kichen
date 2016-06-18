@@ -116,7 +116,7 @@ function run(){
     # ::if don't exit the job ::
     #
     if [ !-e $job ]; then
-       _die "Error!!!! the ETL process don't exist please check the path" 4
+       _die "Error!!!! the ETL process don't exist please check the path" 14
     fi
 
     ##
