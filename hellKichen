@@ -1,22 +1,35 @@
 #!/bin/bash
 
-set -e
+set -e # try-cacht
 set -u
+# export PENTAHO_DI_JAVA_OPTIONS="-Xms1024m -Xmx2048m -XX:MaxPermSize=256m -DBI_SOLUTION_PATH=$repo_path"
 
-TIMER=''
+TIME='time'
 JOB=''
-KETTLE_HOME=''
+KETTLE_HOME="$HOME/live"
 KETTLE_JNDI_ROOT=''
-DEBUGLEVEL=''
+DEBUGLEVEL="Minimal"
 LOGNAME=''
 KETTLE_PAT=''
 KETTLE_LOG=''
+ENVIROMENT="$HOME/live"
+
 
 
 function setEnvironment
 {
-    export KETTLE_HOME=$1
+    local kettlehome=${1:-$HOME}
+    export KETTLE_HOME=$kettlehome
     export KETTLE_JNDI_ROOT=$KETTLE_HOME
+
+    if [ -z "$KETTLE_PAT" ]; then
+     source  "$KETTLE_HOME/hellkitchen.properties"
+    fi
+
+    if [ -z "$KETTLE_LOG" ]; then
+     source  "$KETTLE_HOME/hellkitchen.properties"
+    fi
+    echo -e "Parameters PDI:" $kettle_path "and LOGS" $kettle_log
 }
 
 function _console(){
@@ -31,99 +44,94 @@ function _die(){
     exit $exit_code
 }
 
-function timer(){
- export TIMER='time';
+function _status_pdi(){
+  case  $?  in
+      0) _console "The job ran without a problem." ;;
+      1) _die "Errors occurred during processing" ;;
+      2) _die "An unexpected error occurred during loading / running of the job" ;;
+      7) _die "The job couldn't be loaded from XML or the Repository" ;;
+      8) _die "Error loading steps or plugins (error in loading one of the plugins mostly)";;
+      9) _die "Command line usage printing" ;;
+      *) _die "Unknown error code: $?" ;;
+  esac
 }
 
-function getPdi(){
-    process_id='/bin/ps -fu $USER| grep "$1" | grep -v "grep" | awk '{print $1}''
-    _console $process_id
-    export $process_id;
+
+function help {
+_console "====================[HELP]======================================"
+_console " -t  | --times  time excution (time or empty)"
+_console " -j  | --job   the job name and path"
+_console " -ll | --loglevel  the log level "
+_console ">>>>>>>>>> Error: Only show errors"
+_console ">>>>>>>>>> Nothing: Don't show any output"
+_console ">>>>>>>>>> Minimal: Only use minimal logging"
+_console ">>>>>>>>>> Basic: This is the default basic logging level (Default)"
+_console ">>>>>>>>>> Detailed: Give detailed logging output"
+_console ">>>>>>>>>> Debug: For debugging purposes, very detailed output."
+_console ">>>>>>>>>> Rowlevel: Logging at a row level, this can generate a lot of data."
+_console ">>>>>>>>>> Stream: No log show the content"
+_console " -ln | --logname  the log name with the date and hour of execution"
+_console " -e  | --enviroment  dynamic envairoment(live,docker,pre)"
+_console " -p  | --pdi if you want to change the pdi version in a excution"
+_console " -l  | --log if you want to change the log folder in a excution"
+_console " -h  | --help this is a help about the script"
+_console "================================================================"
+exit
 }
 
-function help(){
-cat <<EOF
-    Usage: hells_kitchen.sh <[options]>
-    Options:
-        -t = time (Optional)
-        -j = job file (ktr or kjb)
-        -l = bug level in pdi:
-             Error: Only show errors
-             Nothing: Don't show any output
-             Minimal: Only use minimal logging
-             Basic: This is the default basic logging level (Default)
-             Detailed: Give detailed logging output
-             Debug: For debugging purposes, very detailed output.
-             Rowlevel: Logging at a row level, this can generate a lot of data.
-             Stream: No log show the content
-        -e = dynamic envairoment (please see the secction enviaroment) (Optional)
-        -p = path of pdi (Optinal)
-        -ln= path of log folder (Optinal)
-EOF
-_die
+function engine {
+  local job=${1:-''}
+
+  if [[ $job =~ \.kjb$ ]]; then
+       engine="kichen"
+  else
+       engine="pan"
+  fi
 }
 
-function stove(){
+function hellskitchen {
+  local timer=${1:-''}
+  local job=${2:-' '}
+  local debug_level=${3:-''}
+  local log_name=${4:-''}
+  local environment=${5:-''}
+  local now=$(date -u +%Y%0m%0d%H%M%S)
+  local log_pattor="${kettle_log}${log_name}_${now}.log"
 
-    local job=${1:-''}
-    local debug_level=${2:-'Basic'}
-    local log_name=${3:-''}
-    local timer=${4:-''}
-    local kettle_path=${5:-''}
-    local kettle_log=${6:-''}
+  cd $kettle_path
 
-    local now=$(date -u +%Y%0m%0d%H%M%S)
-    local log_pattor="${kettle_log}${log_name}_${now}.log"
-    #echo $environment
+  engine $job
 
-    ##
-    # ::if don't exit the job ::
-    #
-    if [ !-e $job ]; then
-        _die "Error!!!! the ETL process don't exist please check the path" 4
-    fi
+  if [ "$debug_level" == "Stream" ]; then
+	cmd="$timer ./$engine -file=$job -level=$debug_level"
+  else
+	cmd="$timer ./$engine -file=$job -level=$debug_level >> $log_pattor"
+  fi
 
-    cd $kettle_path
-    if [[ $job =~ \.kjb$ ]]; then
-        cmd="$timer ./kitchen.sh -file=$job -level=$debug_level  >> $kettle_log"
-    else
-        cmd="$timer ./pan.sh -file=$job -level=$debug_level  >> $kettle_log"
-    fi
-
-    _console "Executing: $cmd"
-
-    sleep 1
-    eval $cmd 2>>$kettle_log
-    case  $?  in
-        0) _console "The job ran without a problem." >> $kettle_log ;;
-        1) _console "Errors occurred during processing" >> $kettle_log ;;
-        2) _console "An unexpected error occurred during loading / running of the job" >> $kettle_log ;;
-        7) _console "The job couldn't be loaded from XML or the Repository" >> $kettle_log ;;
-        8) _console "Error loading steps or plugins (error in loading one of the plugins mostly)" >> $kettle_log ;;
-        9) _console "Command line usage printing" >> $kettle_log ;;
-        *) _console "Unknown error code: $?" >> $kettle_log ;;
-    esac 
+  _console "Executing: $cmd"
+  sleep 10
+  eval $cmd
+  _status_pdi
 }
 
 ##
 # ::main::
 #
-while getopts ":t:j:l:e:p:ln:h" opts; do
-      case ${opts} in
-           t)  TIMER=${OPTARG};;
-           j)  JOB=${OPTARG} ;;
-           l)  LOGNAME=${OPTARG};;
-           e)  setEnvironment ${OPTARG};;
-           p)  KETTLE_PAT=${OPTARG};;
-           ln) KETTLE_LOG=${OPTARG};;
-           h)  help;;
-          \?)  echo "1" ;;
-           :)  echo "2" ;;
-           *)  echo "3" ;;
-      esac
- done
+for i in `seq 1 $#`; do
+  eval OPTION="\$$i"
+  OPTARG=$(echo $OPTION | cut -d'=' -f2)
+  OPTION=$(echo $OPTION | cut -d'=' -f1)
+  case $OPTION in
+  -t  | --times  ) TIME=${OPTARG};;
+  -j  | --job    ) JOB=${OPTARG};;
+  -ll | --loglevel    ) DEBUGLEVEL=${OPTARG};;
+  -ln | --logname   ) LOGNAME=${OPTARG};;
+  -e  | --enviroment ) ENVIROMENT=${OPTARG};;
+  -p  | --pdi    ) kettle_path=${OPTARG};;
+  -l  | --log    ) kettle_log=${OPTARG};;
+	-h  | --help   ) help;;
+  esac
+done
 
-##
-# ::launcher::
-#
-stove $JOB $DEBUGLEVEL $LOGNAME $TIMER $KETTLE_PAT $KETTLE_LOG
+setEnvironment $ENVIROMENT ||
+hellskitchen $TIME $JOB $DEBUGLEVEL $LOGNAME
