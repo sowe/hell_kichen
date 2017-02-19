@@ -63,13 +63,12 @@ The log levels
 ### Errors code and definition
 This is a code error for HK and Pentaho Data Integration:
 
-0) The job ran without a problem.
-1) Errors occurred during processing
-2) An unexpected error occurred during loading / running of the job
-7) The job couldn't be loaded from XML or the Repository
-8) Error loading steps or plugins (error in loading one of the plugins mostly)
-9) Command line usage printing
-*) Unknown error code
+1. 0) The job ran without a problem.
+2. 1) Errors occurred during processing
+3. 2) An unexpected error occurred during loading / running of the job
+4. 7) The job couldn't be loaded from XML or the Repository
+5. 8) Error loading steps or plugins (error in loading one of the plugins mostly)
+6. 9) Command line usage printing:
 
 ### Development
 

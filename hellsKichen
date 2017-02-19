@@ -31,46 +31,6 @@ function _die(){
     exit $exit_code
 }
 
-function lock_process(){
-  lockfile=job.lock
-  pidfile=job.pid
-  retval=1
-
-  if ( set -o noclobber; echo "$PPID" > "$lockfile") 2> /dev/null; 
-  then
- 
-      trap 'rm -f "$lockfile"; exit $?' INT TERM EXIT
- 
-    if [ ! -e $pidfile ]; then
-        _console "pid file does not exist, creating for kettle PID $PPID"
-        _console "$PPID" > "$pidfile" 
-        retval=0
-    else
-        savedpid=`cat "$pidfile"`
-        _console "pid file exists, checking if process $savedpid is a running kettle process"
-        valid=`ps -aef | grep $savedpid | grep 'pentaho' | wc -l | sed -e 's/\s//g'`
-         
-        if [ 1 -eq $valid ]; then
-            _console "kettle process $savedpid found, exiting"
-            retval=1
-        else  
-            _console "stale kettle process $savedpid not found, will continue"
-            _console "$PPID" > "$pidfile" 
-            retval=0
-        fi
-    fi
-    rm -f "$lockfile"
-    trap - INT TERM EXIT
-else
-    _console "Failed to acquire lockfile: $lockfile."
-    _console "Held by $(cat $lockfile)"
-    retval=1
-fi
- 
-_die $retval
-
-}
-
 
 function _status_pdi(){
   case  $?  in
@@ -84,12 +44,49 @@ function _status_pdi(){
   esac
 }
 
+function _lockfile(){
+  lockfile=job.lock
+  pidfile=job.pid
+  retval=1
+   
+  if ( set -o noclobber; echo "$PPID" > "$lockfile") 2> /dev/null; 
+  then
+   
+      trap 'rm -f "$lockfile"; exit $?' INT TERM EXIT
+   
+      if [ ! -e $pidfile ]; then
+          echo "pid file does not exist, creating for kettle PID $PPID"
+          echo "$PPID" > "$pidfile" 
+          retval=0
+      else
+          savedpid=`cat "$pidfile"`
+          echo "pid file exists, checking if process $savedpid is a running kettle process"
+          valid=`ps -aef | grep $savedpid | grep 'pentaho' | wc -l | sed -e 's/\s//g'`
+           
+          if [ 1 -eq $valid ]; then
+              echo "kettle process $savedpid found, exiting"
+              retval=1
+          else
+              echo "stale kettle process $savedpid not found, will continue"
+              echo "$PPID" > "$pidfile" 
+              retval=0
+          fi
+      fi
+      rm -f "$lockfile"
+      trap - INT TERM EXIT
+  else
+      echo "Failed to acquire lockfile: $lockfile."
+      echo "Held by $(cat $lockfile)"
+      retval=1
+  fi
+   
+  _die "exit" $retval
+}
 
 
 function setEnvironment
 {
     local kettlehome=${1:-$KETTLE_HOME}
-    echo $kettlehome
     export KETTLE_HOME=$kettlehome
     export KETTLE_JNDI_ROOT=$KETTLE_HOME
 
@@ -100,7 +97,8 @@ function setEnvironment
     if [ -z "$KETTLE_LOG" ]; then
      source  "$KETTLE_HOME/hellkitchen.properties"
     fi
-    echo -e "Parameters PDI:" $kettle_path "and LOGS" $kettle_log
+    echo "Parameters PDI:" $kettle_path "and LOGS" $kettle_log
+
 }
 
 function getVersion(){
@@ -134,7 +132,6 @@ exit
 
 function engine {
   local job=${1:-''}
-
   if [[ $job =~ \.kjb$ ]]; then
        engine="kichen"
   else
@@ -143,13 +140,17 @@ function engine {
 }
 
 function hellskitchen {
-  local timer=${1:-''}
+
+  local timer=${1:-'time'}
   local job=${2:-''}
   local debug_level=${3:-''}
   local log_name=${4:-''}
   local environment=${5:-''}
   local now=$(date -u +%Y%0m%0d%H%M%S)
-  local log_pattor="${kettle_log}${log_name}_${now}.log"
+  local log_pattor="${KETTLE_LOG}${log_name}_${now}.log"
+  local kettle_path=$KETTLE_PAT
+
+  setEnvironment $environment
 
   cd $kettle_path
 
@@ -163,7 +164,7 @@ function hellskitchen {
 
   _console "Executing: $cmd"
   sleep 10
-  eval $cmd
+  eval  $cmd
   _status_pdi
 }
 
@@ -188,8 +189,8 @@ for i in `seq 1 $#`; do
   esac
 done
 
-if[$lockfile] ; then
-  lock_process || setEnvironment $ENVIROMENT || hellskitchen $TIME $JOB $DEBUGLEVEL $LOGNAME $ENVIROMENT
-else
-  setEnvironment $ENVIROMENT || hellskitchen $TIME $JOB $DEBUGLEVEL $LOGNAME $ENVIROMENT
-fi
+#if[$lockfile] ; then
+#  lock_process || setEnvironment $ENVIROMENT || hellskitchen $TIME $JOB $DEBUGLEVEL $LOGNAME $ENVIROMENT
+#else
+  hellskitchen $TIME $JOB $DEBUGLEVEL $LOGNAME $ENVIROMENT
+#fi
