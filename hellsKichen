@@ -44,71 +44,37 @@ function _status_pdi(){
   esac
 }
 
-function _lockfile(){
-  lockfile=job.lock
-  pidfile=job.pid
-  retval=1
-   
-  if ( set -o noclobber; echo "$PPID" > "$lockfile") 2> /dev/null; 
-  then
-   
-      trap 'rm -f "$lockfile"; exit $?' INT TERM EXIT
-   
-      if [ ! -e $pidfile ]; then
-          echo "pid file does not exist, creating for kettle PID $PPID"
-          echo "$PPID" > "$pidfile" 
-          retval=0
-      else
-          savedpid=`cat "$pidfile"`
-          echo "pid file exists, checking if process $savedpid is a running kettle process"
-          valid=`ps -aef | grep $savedpid | grep 'pentaho' | wc -l | sed -e 's/\s//g'`
-           
-          if [ 1 -eq $valid ]; then
-              echo "kettle process $savedpid found, exiting"
-              retval=1
-          else
-              echo "stale kettle process $savedpid not found, will continue"
-              echo "$PPID" > "$pidfile" 
-              retval=0
-          fi
-      fi
-      rm -f "$lockfile"
-      trap - INT TERM EXIT
-  else
-      echo "Failed to acquire lockfile: $lockfile."
-      echo "Held by $(cat $lockfile)"
-      retval=1
-  fi
-   
-  _die "exit" $retval
-}
-
-
-function setEnvironment
-{
-    local kettlehome=${1:-$KETTLE_HOME}
-    export KETTLE_HOME=$kettlehome
-    export KETTLE_JNDI_ROOT=$KETTLE_HOME
-
-    if [ -z "$KETTLE_PAT" ]; then
-     source  "$KETTLE_HOME/hellkitchen.properties"
-    fi
-
-    if [ -z "$KETTLE_LOG" ]; then
-     source  "$KETTLE_HOME/hellkitchen.properties"
-    fi
-    echo "Parameters PDI:" $kettle_path "and LOGS" $kettle_log
-
-}
 
 function getVersion(){
    _console 'PDI version:'
    cd $kettle_path
    ./kitchen -version | grep "Kitchen - Kettle version"
-    _console 'hellskitchen version: $VERSION'
+   _console 'hellskitchen version: $VERSION'
 }
 
-function help {
+
+function setPath
+{
+  echo "$KETTLE_HOME/hellkitchen.properties"
+  if [ ! -s "$KETTLE_HOME/hellkitchen.properties" ]; then
+    echo "kettle_path=/foler_with_pdi/" | tee -a  "$KETTLE_HOME/hellkitchen.properties";
+    echo "kettle_log=/tmp/logs/" | tee -a $KETTLE_HOME/hellkitchen.properties;
+    _die "you need define the pdi/kettle path and log" 12
+  fi
+   
+  source "$KETTLE_HOME/hellkitchen.properties"
+  echo -e "Parameters PDI:" $kettle_path "and LOGS" $kettle_log
+
+}
+
+function setEnvironment
+{
+  local environment=${1:-"$HOME/live"}
+  export KETTLE_HOME=$environment
+  export KETTLE_JNDI_ROOT=$KETTLE_HOME
+}
+
+function help() {
 _console "====================[HELP]======================================"
 _console " -t  | --times  time excution (time or empty)"
 _console " -j  | --job   the job name and path"
@@ -119,7 +85,6 @@ _console ">>>>>>>>>> Basic: This is the default basic logging level (Default)"
 _console ">>>>>>>>>> Detailed: Give detailed logging output"
 _console ">>>>>>>>>> Debug: For debugging purposes, very detailed output."
 _console ">>>>>>>>>> Rowlevel: Logging at a row level, this can generate a lot of data."
-_console ">>>>>>>>>> Stream: No log show the content"
 _console " -ln | --logname  the log name with the date and hour of execution"
 _console " -e  | --enviroment  dynamic envairoment(live,docker,pre)"
 _console " -p  | --pdi if you want to change the pdi version in a excution"
@@ -149,23 +114,21 @@ function hellskitchen {
   local now=$(date -u +%Y%0m%0d%H%M%S)
   local log_pattor="${KETTLE_LOG}${log_name}_${now}.log"
   local kettle_path=$KETTLE_PAT
+  local lockfile="${KETTLE_LOG}${log_name}_${now}.log"
 
   setEnvironment $environment
+  setPath
 
-  cd $kettle_path
+ #  cd $kettle_path
 
-  engine $job
+ #  engine $job
 
-  if [ "$debug_level" == "Stream" ]; then
-	cmd="$timer ./$engine -file=$job -level=$debug_level"
-  else
-	cmd="$timer ./$engine -file=$job -level=$debug_level >> $log_pattor"
-  fi
+	# cmd="$timer ./$engine -file=$job -level=$debug_level | tee -a $log_pattor"
 
-  _console "Executing: $cmd"
-  sleep 10
-  eval  $cmd
-  _status_pdi
+ #  _console "Executing: $cmd"
+ #  sleep 10
+ #  eval  $cmd
+ #  _status_pdi
 }
 
 ##
@@ -173,24 +136,21 @@ function hellskitchen {
 #
 for i in `seq 1 $#`; do
   eval OPTION="\$$i"
-  OPTARG=$(echo $OPTION | cut -d'=' -f2)
-  OPTION=$(echo $OPTION | cut -d'=' -f1)
+  OPTARG=$(_console $OPTION | cut -d'=' -f2)
+  OPTION=$(_console $OPTION | cut -d'=' -f1)
   case $OPTION in
-  -t  | --times       ) TIME=${OPTARG};;
-  -j  | --job         ) JOB=${OPTARG};;
-  -ll | --loglevel    ) DEBUGLEVEL=${OPTARG};;
-  -ln | --logname     ) LOGNAME=${OPTARG};;
-  -e  | --enviroment  ) ENVIROMENT=${OPTARG};;
-  -p  | --pdi         ) kettle_path=${OPTARG};;
-  -l  | --log         ) KETTLE_LOG=${OPTARG};;
-  -s  | --save        ) LOCKFILE=${OPTARG};;
-  -v  | --version     ) getVersion;;
-	-h  | --help        ) help;;
+  --t  | --times       ) TIME=${OPTARG};;
+  --j  | --job         ) JOB=${OPTARG};;
+  --ll | --loglevel    ) DEBUGLEVEL=${OPTARG};;
+  --ln | --logname     ) LOGNAME=${OPTARG};;
+  --e  | --enviroment  ) ENVIROMENT=${OPTARG};;
+  --p  | --pdi         ) kettle_path=${OPTARG};;
+  --l  | --log         ) KETTLE_LOG=${OPTARG};;
+  --s  | --save        ) LOCKFILE=${OPTARG};;
+  --v  | --version     ) getVersion;;
+	--h  | --help        ) help;;
   esac
 done
 
-#if[$lockfile] ; then
-#  lock_process || setEnvironment $ENVIROMENT || hellskitchen $TIME $JOB $DEBUGLEVEL $LOGNAME $ENVIROMENT
-#else
+
   hellskitchen $TIME $JOB $DEBUGLEVEL $LOGNAME $ENVIROMENT
-#fi
