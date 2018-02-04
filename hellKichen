@@ -3,19 +3,45 @@
 set -e
 set -u
 
+#Global Var
 TIMER=''
 JOB=''
-KETTLE_HOME=''
+KETTLE_HOME='$HOME/repos/bi-config/environment/dev'
 KETTLE_JNDI_ROOT=''
 DEBUGLEVEL=''
 LOGNAME=''
-KETTLE_PAT=''
-KETTLE_LOG=''
+ENVIROMENT="$HOME/repos/bi-config/environment/dev"
+LOCK=''
 
+#special Var
+kettle_path=''
+kettle_log=''
 
-function setEnvironment
+# initial configuration for hellkichen
+function setPath()
 {
-    export KETTLE_HOME=$1
+   if [ ! -f "$KETTLE_HOME/hellkitchen.properties" ]; then
+     echo "kettle_path=/foler_with_pdi/" >> ${KETTLE_HOME}/hellkitchen.properties;
+     echo "kettle_log=/tmp/logs/" >> ${KETTLE_HOME}/hellkitchen.properties;
+     _die "you need define the pdi/kettle path and log" 12
+   fi
+   source "$KETTLE_HOME/hellkitchen.properties"
+
+  if [ -z "$kettle_path" ]; then
+   source  "$KETTLE_HOME/hellkitchen.properties"
+  fi
+
+  if [ -z "$kettle_log" ]; then
+   source  "$KETTLE_HOME/hellkitchen.properties"
+  fi
+
+}
+
+# set the enviromet live,pre,docker
+function setEnvironment()
+{
+    local environment=${1:-''}
+    export KETTLE_HOME=$environment
     export KETTLE_JNDI_ROOT=$KETTLE_HOME
 }
 
@@ -35,10 +61,14 @@ function timer(){
  export TIMER='time';
 }
 
-function getPdi(){
-    process_id='/bin/ps -fu $USER| grep "$1" | grep -v "grep" | awk '{print $1}''
-    _console $process_id
-    export $process_id;
+function _create_mutex(){
+  local lock_file=${1:- '/tmp/$lock_name.lock'}
+  lockfile -r 0 $lock_file || exit 1
+}
+
+function _remove_mutex(){
+  local lock_file=${1:- '/tmp/$lock_name.lock'}
+  rm -f $lock_file
 }
 
 function help(){
@@ -55,75 +85,91 @@ cat <<EOF
              Detailed: Give detailed logging output
              Debug: For debugging purposes, very detailed output.
              Rowlevel: Logging at a row level, this can generate a lot of data.
-             Stream: No log show the content
         -e = dynamic envairoment (please see the secction enviaroment) (Optional)
         -p = path of pdi (Optinal)
         -ln= path of log folder (Optinal)
 EOF
-_die
+_die 0
 }
 
-function stove(){
+function stove() {
+ local enviroment=${1:-''}
+ local job=${2:-''}
+ local log_name=${3:-''}
+ local debug_level=${4:-'Basic'}
+ local timer=${5:-''}
 
-    local job=${1:-''}
-    local debug_level=${2:-'Basic'}
-    local log_name=${3:-''}
-    local timer=${4:-''}
-    local kettle_path=${5:-''}
-    local kettle_log=${6:-''}
 
-    local now=$(date -u +%Y%0m%0d%H%M%S)
-    local log_pattor="${kettle_log}${log_name}_${now}.log"
-    #echo $environment
+ local now=$(date -u +%Y%0m%0d%H%M%S)
+ local log_pattor="${log_name}_${now}.log"
 
-    ##
-    # ::if don't exit the job ::
-    #
-    if [ !-e $job ]; then
-        _die "Error!!!! the ETL process don't exist please check the path" 4
-    fi
 
-    cd $kettle_path
-    if [[ $job =~ \.kjb$ ]]; then
-        cmd="$timer ./kitchen.sh -file=$job -level=$debug_level  >> $kettle_log"
-    else
-        cmd="$timer ./pan.sh -file=$job -level=$debug_level  >> $kettle_log"
-    fi
+ setEnvironment $enviroment
+ setPath
 
-    _console "Executing: $cmd"
+ ##
+ # ::if don't exit the job ::
+ #
+ if [[ ! -f $job ]] ; then
+   _die "Error!!!! the ETL process don't exist please check the path" 4
+ fi
 
-    sleep 1
-    eval $cmd 2>>$kettle_log
-    case  $?  in
-        0) _console "The job ran without a problem." >> $kettle_log ;;
-        1) _console "Errors occurred during processing" >> $kettle_log ;;
-        2) _console "An unexpected error occurred during loading / running of the job" >> $kettle_log ;;
-        7) _console "The job couldn't be loaded from XML or the Repository" >> $kettle_log ;;
-        8) _console "Error loading steps or plugins (error in loading one of the plugins mostly)" >> $kettle_log ;;
-        9) _console "Command line usage printing" >> $kettle_log ;;
-        *) _console "Unknown error code: $?" >> $kettle_log ;;
-    esac 
+
+ cd $kettle_path
+
+ if [[ $job =~ \.kjb$ ]]; then
+    cmd="$timer ./kitchen.sh -file=$job -level=$debug_level | tee -a $kettle_log$log_pattor"
+ else
+    cmd="$timer ./pan.sh -file=$job -level=$debug_level | tee -a  $kettle_log$log_pattor"
+ fi
+
+ echo $kettle_path
+ _create_mutex $log_pattor | tee -a $kettle_log$log_pattor 2>&1 || exit 1
+
+ _console "Executing: $cmd"
+ 
+ sleep 1
+ eval $cmd 2 | tee -a $kettle_log$log_pattor  
+
+ _remove_mutex $log_pattor
+
+ EXIT_STATUS=$?
+ 
+ case  $EXIT_STATUS  in
+  0) _console "The job ran without a problem." | tee -a $kettle_log$log_pattor ;;
+  1) _console "Errors occurred during processing" | tee -a $kettle_log$log_pattor ;;
+  2) _console "An unexpected error occurred during loading / running of the job" | tee -a $kettle_log$log_pattor ;;
+  7) _console "The job couldn't be loaded from XML or the Repository" | tee -a $kettle_log$log_pattor ;;
+  8) _console "Error loading steps or plugins (error in loading one of the plugins mostly)" | tee -a $kettle_log$log_pattor ;;
+  9) _console "Command line usage printing" | tee -a $kettle_log$log_pattor ;;
+  *) _console "Unknown error code: $?" | tee -a $kettle_log$log_pattor ;;
+ esac
+
+ if [[ $EXIT_STATUS -ne "0" ]]; then 
+      rm -rf $log_name.pdi
+     _die "ERROR log_pattor" 1 | tee -a $kettle_log$log_pattor 
+ fi
+
 }
+
 
 ##
 # ::main::
 #
-while getopts ":t:j:l:e:p:ln:h" opts; do
+while getopts ":j:l:e:p:ln:k:ht" opts; do
       case ${opts} in
-           t)  TIMER=${OPTARG};;
+           t)  timer;;
            j)  JOB=${OPTARG} ;;
            l)  LOGNAME=${OPTARG};;
-           e)  setEnvironment ${OPTARG};;
-           p)  KETTLE_PAT=${OPTARG};;
-           ln) KETTLE_LOG=${OPTARG};;
+           n)  DEBUGLEVEL=${OPTARG};;
+           e)  ENVIROMENT=${OPTARG};;
            h)  help;;
-          \?)  echo "1" ;;
-           :)  echo "2" ;;
-           *)  echo "3" ;;
       esac
- done
+done
+
+shift $((OPTIND-1))
 
 ##
 # ::launcher::
 #
-stove $JOB $DEBUGLEVEL $LOGNAME $TIMER $KETTLE_PAT $KETTLE_LOG
+stove $ENVIROMENT $JOB $LOGNAME $DEBUGLEVEL $TIMER
